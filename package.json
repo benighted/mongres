@@ -1,0 +1,20 @@
+{
+  "name": "mongres",
+  "version": "0.1.0",
+  "author": "Michael Payne <benighted@gmail.com>",
+  "description": "Mongres ETL System",
+  "contributors": [],
+  "private": true,
+  "scripts": {
+    "start": "node sync.js"
+  },
+  "main": "sync.js",
+  "dependencies": {
+    "pg": "latest",
+    "mongodb": "latest"
+  },
+  "bundledDependencies": [],
+  "engines": {
+    "node": ">=0.10"
+  }
+}
