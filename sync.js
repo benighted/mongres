@@ -168,8 +168,8 @@ var runOp = function (source, target, op, callback) {
         this.errorCount++;
         errorCountTotal++;
         log("Error " + this.errorCount + " / " + errorCountTotal);
-this.errorCount = (this.readCount - this.writeCount);
-callback(err);
+        this.errorCount = (this.readCount - this.writeCount);
+        callback(err);
       } else {
         this.writeCount++;
         writeCountTotal++;
@@ -220,8 +220,6 @@ callback(err);
         this.readCount++;
         readCountTotal++;
         log("Read  " + this.readCount + " / " + readCountTotal);
-//log(JSON.stringify(query,null,"  "));
-//log(JSON.stringify(update,null,"  "));
         collections[op.target].update(query, update, {
           multi: true,
           upsert: true,
@@ -235,7 +233,8 @@ callback(err);
   // build readFunction which feeds to updateFunction
   if (source.type === DB_TYPE_POSTGRESQL) {
     // get list of columns needed for query
-    var columns = [], getCols = function getCols(model) {
+    var columns = [];
+    (function getCols(model) {
       for (var k in model) {
         if (typeof model[k] === 'object') {
           getCols(model[k]);
@@ -243,15 +242,12 @@ callback(err);
           columns.push('"' + model[k] + '"');
         }
       }
-    };
-    getCols(op.query);
-    getCols(op.update);
+    })([op.query, op.update]);
 
     // build base query and readFunction
     var sql = "SELECT " + columns.join(',') +
       " FROM " + op.source.replace(/[^a-z0-9,'"()_ ]/gi, "");
     var readFunction = function readFunction() {
-log(" query: " + sql);
       var counter = { readCount: 0, writeCount: 0, errorCount: 0 };
       var err, query = source.client.query(sql + (op.offset && !op.cursor ? " OFFSET " + op.offset : ''));
       query.on('row', updateFunction.bind(counter));
@@ -279,7 +275,6 @@ log(" query: " + sql);
     if (op.cursor) { // open new cursor if set
       op.cursor = op.source.replace(/[^a-z0-9_]/gi,'_') + "_cursor_" + new Date().getTime();
       sql = "DECLARE " + op.cursor + " NO SCROLL CURSOR WITH HOLD FOR (" + sql + ")";
-log("query: " + sql);
       log("Opening cursor '" + op.cursor + "' ...");
       source.client.query(sql, function (err, result) {
         if (err) return callback(err);
