@@ -11,7 +11,7 @@ var log = function (msg) {
 };
 
 var error = function (err) {
-  console.error(err);
+  if (err) console.error(err);
 };
 
 var connect = function (config, callback) {
@@ -72,6 +72,9 @@ var run = function (sync, callback) {
   var startDate = new Date();
   var finishDate = null;
 
+  // default generic error handler
+  if (!callback) callback = error;
+
   if (!sync.source) {
     return callback("Source is not defined.");
   } else if (!sync.target) {
@@ -96,9 +99,7 @@ var run = function (sync, callback) {
     finishDate = new Date();
     log("Operations finished at " + finishDate);
     log("Elapsed time: " + ((finishDate.getTime() - startDate.getTime()) / 1000) + " seconds.");
-    // use callback param if set
     if (callback) callback(err);
-    else if (err) error(err);
   };
 
   connect(sync.source, function (err, client, close) {
@@ -153,10 +154,14 @@ var run = function (sync, callback) {
 
  */
 var runOp = function (source, target, op, callback) {
-  log(op);
-
   var updateFunction = null, updateCallback = null, collections = {};
   var readCountTotal = 0, writeCountTotal = 0, errorCountTotal = 0;
+
+  // default generic error handler
+  if (!callback) callback = error;
+
+  // output op json to log
+  log(JSON.stringify(op));
 
   // build update function which saves data to target
   if (target.type === DB_TYPE_POSTGRESQL) {
