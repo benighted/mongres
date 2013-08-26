@@ -9,6 +9,10 @@
     "start": "node sync.js"
   },
   "main": "sync.js",
+  "repository" : {
+    "type" : "git",
+    "url" : "http://github.com/benighted/mongres.git"
+  },
   "dependencies": {
     "pg": "latest",
     "mongodb": "latest"
