@@ -69,6 +69,14 @@ var connect = function (config, callback) {
 };
 
 var run = function (sync, callback) {
+  if (sync instanceof Array) { // run the elements in sequence
+    if (sync.length) return run(sync.shift(), function (err) {
+      if (err) callback(err);
+      else run(sync, callback);
+    });
+    return callback();
+  }
+
   var startDate = new Date();
   var finishDate = null;
 
@@ -146,10 +154,12 @@ var run = function (sync, callback) {
 
   mongo target data:
   {
-    "field1": "value",
-    "field2.sub1": "value",
-    "field2.sub2": {"sub3": "value"},
-    ...
+    "$set": {
+      "field1": "value",
+      "field2.sub1": "value",
+      "field2.sub2": {"sub3": "value"},
+      ...
+    }
   }
 
  */
@@ -237,6 +247,8 @@ var runOp = function (source, target, op, callback) {
 
   // build readFunction which feeds to updateFunction
   if (source.type === DB_TYPE_POSTGRESQL) {
+    // white list to filter dangerous characters
+    var sqlFilter = /[^a-z0-9,'"()<>!=\-\._ ]/gi;
     // get list of columns needed for query
     var columns = [];
     (function getCols(model) {
@@ -244,21 +256,24 @@ var runOp = function (source, target, op, callback) {
         if (typeof model[k] === 'object') {
           getCols(model[k]);
         } else if (typeof model[k] === 'string') {
-          columns.push('"' + model[k] + '"');
+          columns.push('"' + model[k].replace(sqlFilter) + '"');
         }
       }
     })([op.query, op.update]);
 
     // build base query and readFunction
     var sql = "SELECT " + columns.join(',') +
-      " FROM " + op.source.replace(/[^a-z0-9,'"()_ ]/gi, "");
+      " FROM " + op.source.replace(sqlFilter, "") +
+      (op.filter ? " WHERE " + op.filter.replace(sqlFilter, "") : "");
     var readFunction = function readFunction() {
       var counter = { readCount: 0, writeCount: 0, errorCount: 0 };
       var err, query = source.client.query(sql + (op.offset && !op.cursor ? " OFFSET " + op.offset : ''));
       query.on('row', updateFunction.bind(counter));
       query.on('error', function (err2) { err = err2; });
       query.on('end', function end(result) {
-        log((((counter.writeCount + counter.errorCount) / counter.readCount) * 100).toFixed(1) + "% written...");
+        if (counter.readCount) log( // check readCount to avoid divide-by-zero errors
+          (((counter.writeCount + counter.errorCount) / counter.readCount) * 100).toFixed(1) + "% written..."
+        );
         if (counter.readCount > (counter.writeCount + counter.errorCount)) {
           setTimeout(end, 200);
         } else {
@@ -300,15 +315,21 @@ var runOp = function (source, target, op, callback) {
 // loop through sync definitions in SYNCS_PATH
 fs.readdir(SYNCS_PATH, function (err, files) {
   if (err) return log(err);
-  files.forEach(function runLocal(file, i) {
-    var sync = typeof file == 'string' ?
-      require(SYNCS_PATH + file) : file;
-    if (sync instanceof Array) {
-      return sync.forEach(runLocal);
-    } else run(sync, function (err) {
-      if (err) log(err);
-      log("Run finished.");
-      pg.end(); // terminate sessions
-    });
-  });
+
+  log("Sync starting...");
+  var end = function () {
+    log("Sync finished.");
+    pg.end(); // terminate sessions
+  };
+
+  (function readLoop(files) {
+    if (!files || !files.length) end();
+    var file = files.shift();
+    log("Reading from '" + file + "'...");
+    var sync = require(SYNCS_PATH + file);
+    if (!sync) error("Invalid file: " + file);
+    else run(sync, error);
+    if (files.length) readLoop(files);
+    else end();
+  })(files);
 });

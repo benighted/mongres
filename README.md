@@ -25,6 +25,7 @@ The file should contain a JSON object (or an array of objects) like this:
         "operations": [
           {
             "source"      : "t_category",
+            "filter"      : "changed > now() - interval'24 hours'",
             "target"      : "category",
             "query"       : {"_id": "category_id"},
             "update"      : {
@@ -37,6 +38,7 @@ The file should contain a JSON object (or an array of objects) like this:
           },
           {
             "source"      : "t_inventory join t_product using(product_id)",
+            "filter"      : "t_inventory.changed > now() - interval'24 hours'",
             "target"      : "inventory",
             "cursor"      : true,
             "limit"       : 1000,
@@ -60,6 +62,5 @@ Multiple sync objects (the container of `source`, `target`, and `operations`) in
 
 ### TODO:
 * Add postgres target and mongo source options.
-* Add configurable filters to limit results of source queries.
 * Automate the creation of database triggers and delta tables.
 * Add process to monitor the databases in real-time (using pg_notify, etc).
