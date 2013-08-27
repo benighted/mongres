@@ -56,7 +56,7 @@ The file should contain a JSON object (or an array of objects) like this:
         ]
       }
       
-Multiple sync objects (the container of `source`, `target`, and `operations`) in the same file will be executed sequentially as defined.  Other files in the syncs folder may be ran concurrently.
+Multiple sync objects (the container of `source`, `target`, and `operations`) in the same file and the `operations` within each one will be executed sequentially as defined.  Other files in the syncs folder may be ran concurrently.
 
 ### TODO:
 * Add postgres target and mongo source options.
