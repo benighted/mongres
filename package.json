@@ -4,7 +4,6 @@
   "author": "Michael Payne <benighted@gmail.com>",
   "description": "Mongres ETL System",
   "contributors": [],
-  "private": true,
   "scripts": {
     "start": "node sync.js"
   },
