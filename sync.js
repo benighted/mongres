@@ -2,9 +2,10 @@ var SYNCS_PATH = './syncs/';
 var DB_TYPE_MONGODB = 'mongodb';
 var DB_TYPE_POSTGRESQL = 'postgresql';
 
+var fs = require('fs');
 var mg = require('mongodb').Db;
 var pg = require('pg');
-var fs = require('fs');
+require('pg-parse-float')(pg);
 
 var log = function (msg) {
   console.log(msg);
@@ -73,8 +74,7 @@ var run = function (sync, callback) {
     if (sync.length) return run(sync.shift(), function (err) {
       if (err) callback(err);
       else run(sync, callback);
-    });
-    return callback();
+    }); else return callback();
   }
 
   var startDate = new Date();
@@ -105,7 +105,7 @@ var run = function (sync, callback) {
     }
     // send stats to the log
     finishDate = new Date();
-    log("Operations finished at " + finishDate);
+    log("\nOperations finished at " + finishDate);
     log("Elapsed time: " + ((finishDate.getTime() - startDate.getTime()) / 1000) + " seconds.");
     if (callback) callback(err);
   };
@@ -171,7 +171,8 @@ var runOp = function (source, target, op, callback) {
   if (!callback) callback = error;
 
   // output op json to log
-  log(JSON.stringify(op));
+  log("\nStarting operation...");
+  log(JSON.stringify(op, null, "  "));
 
   // build update function which saves data to target
   if (target.type === DB_TYPE_POSTGRESQL) {
@@ -283,7 +284,7 @@ var runOp = function (source, target, op, callback) {
             readFunction();
           } else {
             if (op.cursor) {
-              log("Closing cursor '" + op.cursor + "' ...");
+              log("Closing cursor '" + op.cursor + "'...");
               source.client.query("CLOSE " + op.cursor, function (err2) { callback(err || err2); });
             } else callback(err);
           }
@@ -295,15 +296,16 @@ var runOp = function (source, target, op, callback) {
     if (op.cursor) { // open new cursor if set
       op.cursor = op.source.replace(/[^a-z0-9_]/gi,'_') + "_cursor_" + new Date().getTime();
       sql = "DECLARE " + op.cursor + " NO SCROLL CURSOR WITH HOLD FOR (" + sql + ")";
-      log("Opening cursor '" + op.cursor + "' ...");
+      log("Opening cursor '" + op.cursor + "'...");
       source.client.query(sql, function (err, result) {
         if (err) return callback(err);
         // replace operation sql with a query to this cursor
-        log("Fetching from cursor '" + op.cursor + "' ...");
+        log("Fetching from cursor '" + op.cursor + "'...");
         sql = "FETCH FORWARD " + (op.limit ? op.limit : 1000) + " FROM " + op.cursor;
         readFunction(); // fetch from the cursor
       });
     } else { // limit and query without a cursor
+      log("Reading from source '" + op.source + "'...");
       if (op.limit) sql = sql + " LIMIT " + (op.limit + 1);
       readFunction();
     }

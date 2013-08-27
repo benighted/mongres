@@ -9,16 +9,27 @@
     "start": "node sync.js"
   },
   "main": "sync.js",
-  "repository" : {
-    "type" : "git",
-    "url" : "http://github.com/benighted/mongres.git"
+  "repository": {
+    "type": "git",
+    "url": "http://github.com/benighted/mongres.git"
   },
   "dependencies": {
     "pg": "latest",
+    "pg-parse-float": "latest",
     "mongodb": "latest"
   },
-  "bundledDependencies": [],
   "engines": {
     "node": ">=0.10"
-  }
+  },
+  "bugs": {
+    "url": "https://github.com/benighted/mongres/issues"
+  },
+  "bundleDependencies": [],
+  "devDependencies": {},
+  "keywords": [
+    "mongodb",
+    "postgresql",
+    "etl"
+  ],
+  "license": "GPL"
 }
