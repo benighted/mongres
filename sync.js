@@ -298,15 +298,18 @@ var buildReader = function (source, op, updater) {
       query.on('row', function (row) {
         // honor the operation read limit if one has been set
         if (op.limit && counter.readCount >= op.limit) return;
-        else ++counter.readCount && updater(row, function (err, aff) {
-          if (err || !aff) {
-            ++counter.errorCount;
-            if (err) error (err);
-          } else ++counter.writeCount;
-          log("R: " + counter.readCount + " / " + counter.readCountTotal +
-            "\tW: " + counter.writeCount + " / " + counter.writeCountTotal +
-            "\tE: " + counter.errorCount + " / " + counter.errorCountTotal);
-        });
+        else {
+          ++counter.readCount;
+          updater(row, function (err, aff) {
+            if (err || !aff) {
+              ++counter.errorCount;
+              if (err) error (err);
+            } else ++counter.writeCount;
+            log("R: " + counter.readCount + " / " + counter.readCountTotal +
+              "\tW: " + counter.writeCount + " / " + counter.writeCountTotal +
+              "\tE: " + counter.errorCount + " / " + counter.errorCountTotal);
+          });
+        }
       });
       query.on('end', function end(result) {
         if (!op.limit || counter.readCount < op.limit) {
@@ -347,7 +350,7 @@ var buildReader = function (source, op, updater) {
     };
   } else if (source.type === DB_TYPE_MONGODB) {
     // not implemented yet
-  };
+  }
 
   return reader;
 };
