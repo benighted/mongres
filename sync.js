@@ -71,10 +71,11 @@ var connect = function (config, callback) {
 
 var run = function (sync, callback) {
   if (sync instanceof Array) { // run the elements in sequence
-    if (sync.length) return run(sync.shift(), function (err) {
+    if (sync.length) run(sync.shift(), function (err) {
       if (err) callback(err);
       else run(sync, callback);
-    }); else return callback();
+    }); else callback();
+    return;
   }
 
   var startDate = new Date();
@@ -125,76 +126,66 @@ var run = function (sync, callback) {
   });
 };
 
-/*
-
-  postgres source data:
-  {
-    "column1": "value",
-    "column2": "value",
-    ...
-  }
-
-  postgres target data:
-  {
-    "column1": "value",
-    "column2": "value",
-    ...
-  }
-
-  mongo source data:
-  {
-    "field1": "value",
-    "field2": {
-      "sub1": "value",
-      "sub2": {
-        "sub3": "value"
-      }
+var buildCounter = function () {
+  return {
+    _readCount: 0,
+    _writeCount: 0,
+    _errorCount: 0,
+    _readCountTotal: 0,
+    _writeCountTotal: 0,
+    _errorCountTotal: 0,
+    get readCount() {
+      return this._readCount;
+    },
+    set readCount(n) {
+      if (n < 0) return;
+      this._readCountTotal += n - this._readCount;
+      this._readCount = n;
+    },
+    get readCountTotal() {
+      return this._readCountTotal;
+    },
+    get writeCount() {
+      return this._writeCount;
+    },
+    set writeCount(n) {
+      if (n < 0) return;
+      this._writeCountTotal += n - this._writeCount;
+      this._writeCount = n;
+    },
+    get writeCountTotal() {
+      return this._writeCountTotal;
+    },
+    get errorCount() {
+      return this._errorCount;
+    },
+    set errorCount(n) {
+      if (n < 0) return;
+      this._errorCountTotal += n - this._errorCount;
+      this._errorCount = n;
+    },
+    get errorCountTotal() {
+      return this._errorCountTotal;
+    },
+    // reset counts but leave totals intact
+    reset: function () {
+      this._readCount = 0;
+      this._writeCount = 0;
+      this._errorCount = 0;
     }
-  }
+  };
+};
 
-  mongo target data:
-  {
-    "$set": {
-      "field1": "value",
-      "field2.sub1": "value",
-      "field2.sub2": {"sub3": "value"},
-      ...
-    }
-  }
+var buildUpdater = function (target, op) {
+  var updater = null;
 
- */
-var runOp = function (source, target, op, callback) {
-  var updateFunction = null, updateCallback = null, collections = {};
-  var readCountTotal = 0, writeCountTotal = 0, errorCountTotal = 0;
-
-  // default generic error handler
-  if (!callback) callback = error;
-
-  // output op json to log
-  log("\nStarting operation...");
-  log(JSON.stringify(op, null, "  "));
-
-  // build update function which saves data to target
-  if (target.type === DB_TYPE_POSTGRESQL) {
-    callback('PostgreSQL target not supported yet.');
+  if (op.target.type === DB_TYPE_POSTGRESQL) {
+    // not implemented yet
   } else if (target.type === DB_TYPE_MONGODB) {
-    updateCallback = function (err, num) {
-      // increment write or error counter
-      if (err || !num) {
-        this.errorCount++;
-        errorCountTotal++;
-        log("Error " + this.errorCount + " / " + errorCountTotal);
-        this.errorCount = (this.readCount - this.writeCount);
-        callback(err);
-      } else {
-        this.writeCount++;
-        writeCountTotal++;
-        log("Write " + this.writeCount + " / " + writeCountTotal);
-      }
-    };
-    updateFunction = function (data) {
-      // honor operation read limit if set
-      if (op.limit && this.readCount >= op.limit) return;
+    var collection = target.client.collection(op.target);
+    updater = function (data, callback) {
+      // default generic error handler
+      if (!callback) callback = error;
 
       // a function to dereference data models
       var deref = function deref(model, src) {
@@ -213,43 +204,48 @@ var runOp = function (source, target, op, callback) {
       var query = deref(op.query, data);
       // get values to use for update
       var update = deref(op.update, data);
+
       // verify values are dereferenced
       if (!Object.keys(query).length) {
-        this.errorCount++;
-        return updateCallback("Query keys not found in data source.");
+        callback('Query values not found in source.');
       } else if (!Object.keys(update).length) {
-        this.errorCount++;
-        return updateCallback("Update keys not found in data source.");
-      }
-
-      // connect to target collection and save a reference for later
-      if (!collections[op.target]) { // collection has not been used
-        collections[op.target] = target.client.collection(op.target);
-      }
-
-      // perform updates if connected
-      if (!collections[op.target]) {
-        this.errorCount++;
-        return updateCallback("Unable to connect to '" + op.target + "' collection.");
-      } else {
-        // increment read counter
-        this.readCount++;
-        readCountTotal++;
-        log("Read  " + this.readCount + " / " + readCountTotal);
-        collections[op.target].update(query, update, {
+        callback('Update values not found in source.');
+      } else { // update target collection
+        collection.update(query, update, {
           multi: true,
           upsert: true,
           journal: true,
           w: 1
-        }, updateCallback.bind(this));
+        }, callback);
       }
     };
-  } else return callback("Target client is invalid.");
+  }
 
-  // build readFunction which feeds to updateFunction
+  return updater;
+};
+
+var interpolate = function (text, data) {
+  if (!data || typeof data != 'object') {
+    // invalid or missing data source
+  } else if (typeof text == 'object') {
+    for (var key in text) {
+      text[key] = interpolate(text[key], data);
+    }
+  } else if (typeof text == 'string') {
+    var matches = text.match(/{{([^{}]*)}}/gm);
+    for (var i = 0; matches && i < matches.length; i++) {
+      if (data[matches[i].slice(2, -2)]) { // replace handlebars tokens
+        text = text.replace(matches[i], data[matches[i].slice(2, -2)]);
+      }
+    }
+  }
+  return text;
+};
+
+var buildReader = function (source, op, updater) {
+  var reader = null, counter = buildCounter(), initialized = {};
+
   if (source.type === DB_TYPE_POSTGRESQL) {
-    // white list to filter dangerous characters
-    var sqlFilter = /[^a-z0-9,'"()<>!=\-\._ ]/gi;
     // get list of columns needed for query
     var columns = [];
     (function getCols(model) {
@@ -257,61 +253,123 @@ var runOp = function (source, target, op, callback) {
         if (typeof model[k] === 'object') {
           getCols(model[k]);
         } else if (typeof model[k] === 'string') {
-          columns.push('"' + model[k].replace(sqlFilter) + '"');
+          columns.push('"' + model[k] + '"');
         }
       }
     })([op.query, op.update]);
 
-    // build base query and readFunction
-    var sql = "SELECT " + columns.join(',') +
-      " FROM " + op.source.replace(sqlFilter, "") +
-      (op.filter ? " WHERE " + op.filter.replace(sqlFilter, "") : "");
-    var readFunction = function readFunction() {
-      var counter = { readCount: 0, writeCount: 0, errorCount: 0 };
-      var err, query = source.client.query(sql + (op.offset && !op.cursor ? " OFFSET " + op.offset : ''));
-      query.on('row', updateFunction.bind(counter));
-      query.on('error', function (err2) { err = err2; });
+    // build base query for the operation
+    var sql = "SELECT " + columns.join(',') + " FROM " + op.source +
+      (op.filter ? " WHERE " + op.filter : "") +
+      (!op.cursor && op.limit ? " LIMIT " + (op.limit + 1) : "") +
+      (!op.cursor && op.limit && op.offset ? " OFFSET " + op.offset : "");
+
+    // build a reader function for source
+    reader = function (callback) {
+      // perform initialization action if defined and not initialized
+      if (op.actions && op.actions.init && !initialized.initAction) {
+        log("\nExecuting 'init' query '" + op.actions.init + "'...");
+        return source.client.query(op.actions.init, function (err, result) {
+          initialized.initAction = true;
+          return reader(callback);
+        });
+      }
+
+      // open cursor if defined and not initialized
+      if (op.cursor && !initialized.sourceCursor) {
+        op.cursor = op.source.replace(/[^a-z0-9_]/gi,'_') + "_cursor_" + new Date().getTime();
+        sql = "DECLARE " + op.cursor + " NO SCROLL CURSOR WITH HOLD FOR (" + sql + ")";
+        log("\nOpening cursor '" + op.cursor + "'...");
+        return source.client.query(sql, function (err, result) {
+          if (err) return callback(err);
+          // replace original sql query with a query against this cursor
+          sql = "FETCH FORWARD " + (op.limit ? op.limit : 1000) + " FROM " + op.cursor;
+          initialized.sourceCursor = true;
+          return reader(callback);
+        });
+      }
+
+      // execute the query and repeat as is necessary for results
+      log("\nExecuting query '" + sql + "'...");
+      if (op.cursor) log("Using cursor '" + op.cursor + "'...");
+      var err, query = source.client.query(sql, function (err2) {
+        if (err2) err = err2; // record error for the "end" event
+      });
+      query.on('row', function (row) {
+        // honor the operation read limit if one has been set
+        if (op.limit && counter.readCount >= op.limit) return;
+        else ++counter.readCount && updater(row, function (err, aff) {
+          if (err || !aff) {
+            ++counter.errorCount;
+            if (err) error (err);
+          } else ++counter.writeCount;
+          log("R: " + counter.readCount + " / " + counter.readCountTotal +
+            "\tW: " + counter.writeCount + " / " + counter.writeCountTotal +
+            "\tE: " + counter.errorCount + " / " + counter.errorCountTotal);
+        });
+      });
       query.on('end', function end(result) {
-        if (counter.readCount) log( // check readCount to avoid divide-by-zero errors
-          (((counter.writeCount + counter.errorCount) / counter.readCount) * 100).toFixed(1) + "% written..."
-        );
+        if (!op.limit || counter.readCount < op.limit) {
+          // finished reading rows from source
+          if (op.cursor && initialized.cursor) {
+            log("\nClosing cursor '" + op.cursor + "'...");
+            source.client.query("CLOSE " + op.cursor);
+            initialized.cursor = false;
+          }
+        }
+        if (counter.readCount) { // check readCount to avoid divide-by-zero errors when no records were returned
+          log((((counter.writeCount + counter.errorCount) / counter.readCount) * 100).toFixed(1) + "% written...");
+        }
         if (counter.readCount > (counter.writeCount + counter.errorCount)) {
-          setTimeout(end, 200);
+          setTimeout(end, 500); // wait for database writes to conclude
         } else {
           if (!err && op.limit && counter.readCount >= op.limit) {
-            if (!op.offset) op.offset = 0;
-            op.offset += op.limit;
-            readFunction();
+            // reset the counter and run another batch
+            op.offset = op.offset + counter.readCount;
+            counter.reset();
+            return reader(callback);
           } else {
-            if (op.cursor) {
-              log("Closing cursor '" + op.cursor + "'...");
-              source.client.query("CLOSE " + op.cursor, function (err2) { callback(err || err2); });
-            } else callback(err);
+            // perform finalization action if defined
+            if (op.actions && op.actions.done && !err && !counter.errorCountTotal) {
+              log("\nExecuting 'done' query '" + op.actions.done + "'...");
+              return source.client.query(op.actions.done, function (err) {
+                return callback(err);
+              });
+            } else if (op.actions && op.actions.fail && (err || counter.errorCountTotal)) {
+              log("\nExecuting 'fail' query '" + op.actions.fail + "'...");
+              return source.client.query(op.actions.fail, function (err) {
+                return callback(err);
+              });
+            } else return callback(err);
           }
         }
       });
     };
-
-    // execute query by calling readFunction()
-    if (op.cursor) { // open new cursor if set
-      op.cursor = op.source.replace(/[^a-z0-9_]/gi,'_') + "_cursor_" + new Date().getTime();
-      sql = "DECLARE " + op.cursor + " NO SCROLL CURSOR WITH HOLD FOR (" + sql + ")";
-      log("Opening cursor '" + op.cursor + "'...");
-      source.client.query(sql, function (err, result) {
-        if (err) return callback(err);
-        // replace operation sql with a query to this cursor
-        log("Fetching from cursor '" + op.cursor + "'...");
-        sql = "FETCH FORWARD " + (op.limit ? op.limit : 1000) + " FROM " + op.cursor;
-        readFunction(); // fetch from the cursor
-      });
-    } else { // limit and query without a cursor
-      log("Reading from source '" + op.source + "'...");
-      if (op.limit) sql = sql + " LIMIT " + (op.limit + 1);
-      readFunction();
-    }
   } else if (source.type === DB_TYPE_MONGODB) {
-    callback('MongoDB source not supported yet.');
-  } else return callback("Source client is invalid.");
+    // not implemented yet
+  };
+
+  return reader;
+};
+
+var runOp = function (source, target, op, callback) {
+  // default generic error handler
+  if (!callback) callback = error;
+
+  // output op json to log
+  log("\nStarting operation...");
+  log(JSON.stringify(op, null, "  "));
+
+  // function to update target database
+  var updater = buildUpdater(target, op);
+  if (!updater) return callback('Target is invalid.');
+
+  // function to read data into updater function
+  var reader = buildReader(source, op, updater);
+  if (!reader) return callback('Source is invalid.');
+
+  // begin reading if objects were created
+  return reader(callback);
 };
 
 // loop through sync definitions in SYNCS_PATH
