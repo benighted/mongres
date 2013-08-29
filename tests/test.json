@@ -1,0 +1,43 @@
+{
+  "source"  : {
+    "type"    : "postgresql",
+    "name"    : "postgres",
+    "user"    : "postgres",
+    "pass"    : "",
+    "host"    : "10.101.3.161",
+    "port"    : 5432
+  },
+  "target" : {
+    "type"    : "mongodb",
+    "name"    : "mongres_test",
+    "user"    : "",
+    "pass"    : "",
+    "host"    : "localhost",
+    "port"    : 27017
+  },
+  "operations": [
+    {
+      "name"        : "Mongres Test",
+      "source"      : "(select 'test' as \"test\", generate_series(1,100) as i, random()) sub",
+      "cursor"      : "mongres_test_cursor",
+      "limit"       : 25,
+      "target"      : "test",
+      "filter"      : "i % 2 = 0",
+      "actions"     : {
+        "init"      : "select now(), 'test', 123",
+        "done"      : {
+          "name"    : "mongres_test_ps",
+          "text"    : "select now(), $1::text, $2::int",
+          "values"  : ["test",123]
+        }
+      },
+      "query"       : {"_id": "i"},
+      "update"      : {
+        "$set"      : {
+          "test"    : "test",
+          "rand"  : "random"
+        }
+      }
+    }
+  ]
+}

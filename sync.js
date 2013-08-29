@@ -439,7 +439,6 @@ var runOp = function (source, target, op, callback) {
 
 // execution begins here
 
-log("Sync starting...");
 if (debugMode) log("Debug mode enabled.");
 if (canParseFloat) require("pg-parse-float")(pg);
 
@@ -450,7 +449,6 @@ fs.readdir(SYNCS_PATH, function (err, files) {
   (function readLoop(files, callback) {
     if (!files || !files.length) callback("No files found.");
     var fileName = files.shift().trim();
-    debug(fileName.indexOf(".json") + " / " + fileName.length);
     if (fileName.length < 5 || fileName.lastIndexOf(".json") != fileName.length - 5) {
       debug("Skipping file '" + fileName + "'..."); // skip it
     } else if (syncFiles.length && syncFiles.indexOf(fileName) === -1) {
@@ -470,7 +468,6 @@ fs.readdir(SYNCS_PATH, function (err, files) {
     else callback();
   })(files, function (err) {
     if (err) error(err);
-    log("Sync finished.");
     pg.end(); // terminate sessions
   });
 
