@@ -265,8 +265,8 @@ var buildReader = function (source, op, updater) {
             initialized.cursor = false;
           }
         }
-        if (counter.readCount) { // check readCount to avoid divide-by-zero errors when no records were returned
-          log((((counter.writeCount + counter.errorCount) / counter.readCount) * 100).toFixed(1) + "% written...");
+        if (counter.readCount > 0 && counter.writeCount > 0) { // check count > 0 to avoid divide-by-zero errors
+          log((((counter.writeCount + counter.errorCount) / counter.readCount) * 100).toFixed(1) + "% written");
         }
         if (counter.readCount > (counter.writeCount + counter.errorCount)) {
           setTimeout(end, 500); // wait for database writes to conclude
@@ -277,6 +277,9 @@ var buildReader = function (source, op, updater) {
             counter.reset();
             return reader(callback);
           } else {
+            log("Read " + counter.readCountTotal + 
+              " records, wrote " + counter.writeCountTotal + 
+              " records, with " + counter.errorCountTotal + " errors.");
             // perform finalization action if defined
             if (op.actions && op.actions.done && !err && !counter.errorCountTotal) {
               debug("Executing 'done' query '" + (op.actions.done.text || op.actions.done) + "'...");
@@ -379,6 +382,7 @@ var run = function (sync, callback) {
   // supplement the given callback
   var endOps = []; // terminations
   var end = function (err) {
+    log("\nEnding operations...");
     // run any termination operations
     while (endOps && endOps.length) {
       var op = endOps.shift();
@@ -411,7 +415,7 @@ var runOp = function (source, target, op, callback) {
   var startDate = new Date();
   var finishDate = null;
 
-  log("\n" + (op.name ? op.name : "Operation") + " starting at " + startDate + "...");
+  log("\n" + (op.name ? op.name : "Operation") + " started at " + startDate);
   debug(JSON.stringify(op, null, "  "));
 
   // default generic error handler
@@ -420,8 +424,8 @@ var runOp = function (source, target, op, callback) {
   var endOp = function (err) {
     // send stats to the log
     finishDate = new Date();
-    log("\n" + (op.name ? op.name : "Operation") + " finished at " + finishDate + "...");
     log("Elapsed time: " + ((finishDate.getTime() - startDate.getTime()) / 1000) + " seconds.");
+    log((op.name || "Operation") + " finished at " + finishDate);
     if (callback) callback(err);
   };
 
