@@ -5,7 +5,8 @@
   "description": "Mongres ETL System",
   "contributors": [],
   "scripts": {
-    "start": "node sync.js"
+    "start": "node sync.js",
+    "test": "node sync.js --debug --syncs-path ./tests --file test.json"
   },
   "main": "sync.js",
   "repository": {
@@ -13,9 +14,10 @@
     "url": "http://github.com/benighted/mongres.git"
   },
   "dependencies": {
-    "pg": "latest",
+    "pg": "1.x",
     "pg-parse-float": "latest",
-    "mongodb": "latest"
+    "mongodb": "latest",
+    "ansi": "latest"
   },
   "engines": {
     "node": ">=0.10"
