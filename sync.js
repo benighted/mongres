@@ -237,9 +237,10 @@ var buildReader = function (source, op, updater) {
 
       // execute the query and repeat as is necessary for results
       debug("Executing query '" + sql + "'...");
-      var err, query = source.client.query(sql, function (err2) {
+      var err, query = source.client.query(sql);
+      query.on("error", function (err2)) {
         if (err2) err = err2; // record error for the "end" event
-      });
+      }
       query.on("row", function (row) {
         // honor the operation read limit if one has been set
         if (op.limit && counter.readCount >= op.limit) return;
