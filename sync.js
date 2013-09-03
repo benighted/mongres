@@ -187,6 +187,15 @@ var buildUpdater = function (target, op) {
 
 var buildReader = function (source, op, updater) {
   var reader = null, counter = buildCounter(), initialized = {};
+  var updaterCallback = function (err, aff) {
+    if (err || !aff) {
+      ++counter.errorCount;
+      if (err) error (err);
+    } else ++counter.writeCount;
+    debug("R: " + counter.readCount + " / " + counter.readCountTotal +
+      "\tW: " + counter.writeCount + " / " + counter.writeCountTotal +
+      "\tE: " + counter.errorCount + " / " + counter.errorCountTotal);
+  };
 
   if (source.type === DB_TYPE_POSTGRESQL) {
     // get list of columns needed for query
@@ -246,15 +255,7 @@ var buildReader = function (source, op, updater) {
         if (op.limit && counter.readCount >= op.limit) return;
         else {
           ++counter.readCount;
-          updater(row, function (err, aff) {
-            if (err || !aff) {
-              ++counter.errorCount;
-              if (err) error (err);
-            } else ++counter.writeCount;
-            debug("R: " + counter.readCount + " / " + counter.readCountTotal +
-              "\tW: " + counter.writeCount + " / " + counter.writeCountTotal +
-              "\tE: " + counter.errorCount + " / " + counter.errorCountTotal);
-          });
+          updater(row, updaterCallback);
         }
       });
       query.on("end", function end(result) {
@@ -263,7 +264,7 @@ var buildReader = function (source, op, updater) {
           if (op.cursor && initialized.sourceCursor) {
             debug("Closing cursor '" + op.cursor + "'...");
             source.client.query("CLOSE " + op.cursor);
-            initialized.cursor = false;
+            initialized.sourceCursor = false;
           }
         }
         if (counter.readCount > 0 && counter.writeCount > 0) { // check count > 0 to avoid divide-by-zero errors
