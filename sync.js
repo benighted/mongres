@@ -235,6 +235,7 @@ var buildReader = function (source, op, updater) {
         // open the cursor and prepare to fetch from it
         sql = "DECLARE " + op.cursor + " NO SCROLL CURSOR WITH HOLD FOR (" + sql + ")";
         debug("Opening cursor '" + op.cursor + "'...");
+        debug("Executing query '" + sql + "'...");
         return source.client.query(sql, function (err, result) {
           if (err) return callback(err);
           // replace original sql query with a query against this cursor
@@ -263,6 +264,7 @@ var buildReader = function (source, op, updater) {
           // finished reading rows from source
           if (op.cursor && initialized.sourceCursor) {
             debug("Closing cursor '" + op.cursor + "'...");
+            debug("Executing query 'CLOSE " + op.cursor + "'...");
             source.client.query("CLOSE " + op.cursor);
             initialized.sourceCursor = false;
           }
