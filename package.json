@@ -1,12 +1,12 @@
 {
   "name": "mongres",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": "Michael Payne <benighted@gmail.com>",
   "description": "Mongres ETL System",
   "contributors": [],
   "scripts": {
     "start": "node sync.js",
-    "test": "node sync.js --debug --syncs-path ./tests --file test.json"
+    "test": "node sync.js --debug --syncs-path ./tests"
   },
   "main": "sync.js",
   "repository": {
