@@ -4,7 +4,7 @@
     "name"    : "postgres",
     "user"    : "postgres",
     "pass"    : "",
-    "host"    : "10.101.3.161",
+    "host"    : "localhost",
     "port"    : 5432
   },
   "target" : {
