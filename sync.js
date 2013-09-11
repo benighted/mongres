@@ -265,8 +265,9 @@ var buildReader = function (source, op, updater) {
           if (op.cursor && initialized.sourceCursor) {
             debug("Closing cursor '" + op.cursor + "'...");
             debug("Executing query 'CLOSE " + op.cursor + "'...");
-            source.client.query("CLOSE " + op.cursor);
-            initialized.sourceCursor = false;
+            source.client.query("CLOSE " + op.cursor, function (err, result) {
+              if (!err) initialized.sourceCursor = false;
+            });
           }
         }
         if (counter.readCount > 0 && counter.writeCount > 0) { // check count > 0 to avoid divide-by-zero errors
