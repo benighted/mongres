@@ -173,10 +173,10 @@ var buildUpdater = function (target, op) {
         callback("Update values not found in source.");
       } else { // update target collection
         collection.update(query, update, {
-          multi: true,
-          upsert: true,
-          journal: true,
-          w: 1
+          multi: op.multi === undefined ? true : op.multi,
+          upsert: op.upsert === undefined ? true : op.upsert,
+          journal: op.journal === undefined ? true : op.journal,
+          w: op.writeConcern === undefined ? 1 : op.writeConcern
         }, callback);
       }
     };
@@ -188,7 +188,7 @@ var buildUpdater = function (target, op) {
 var buildReader = function (source, op, updater) {
   var reader = null, counter = buildCounter(), initialized = {};
   var updaterCallback = function (err, aff) {
-    if (err || !aff) {
+    if (err) {
       ++counter.errorCount;
       if (err) error (err);
     } else ++counter.writeCount;
@@ -235,6 +235,7 @@ var buildReader = function (source, op, updater) {
         // open the cursor and prepare to fetch from it
         sql = "DECLARE " + op.cursor + " NO SCROLL CURSOR WITH HOLD FOR (" + sql + ")";
         debug("Opening cursor '" + op.cursor + "'...");
+        debug("Executing query '" + sql + "'...");
         return source.client.query(sql, function (err, result) {
           if (err) return callback(err);
           // replace original sql query with a query against this cursor
@@ -263,6 +264,7 @@ var buildReader = function (source, op, updater) {
           // finished reading rows from source
           if (op.cursor && initialized.sourceCursor) {
             debug("Closing cursor '" + op.cursor + "'...");
+            debug("Executing query 'CLOSE " + op.cursor + "'...");
             source.client.query("CLOSE " + op.cursor, function (err, result) {
               if (!err) initialized.sourceCursor = false;
             });
