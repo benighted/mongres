@@ -173,10 +173,10 @@ var buildUpdater = function (target, op) {
         callback("Update values not found in source.");
       } else { // update target collection
         collection.update(query, update, {
-          multi: true,
-          upsert: true,
-          journal: true,
-          w: 1
+          multi: op.multi === undefined ? true : op.multi,
+          upsert: op.upsert === undefined ? true : op.upsert,
+          journal: op.journal === undefined ? true : op.journal,
+          w: op.writeConcern === undefined ? 1 : op.writeConcern
         }, callback);
       }
     };
@@ -188,7 +188,7 @@ var buildUpdater = function (target, op) {
 var buildReader = function (source, op, updater) {
   var reader = null, counter = buildCounter(), initialized = {};
   var updaterCallback = function (err, aff) {
-    if (err || !aff) {
+    if (err) {
       ++counter.errorCount;
       if (err) error (err);
     } else ++counter.writeCount;
