@@ -1,4 +1,4 @@
-var SYNCS_PATH = "./syncs/";
+var SYNCS_PATH = __dirname + "/syncs/";
 var DB_TYPE_MONGODB = "mongodb";
 var DB_TYPE_POSTGRESQL = "postgresql";
 
@@ -8,6 +8,7 @@ var pg = require("pg");
 var ansi = require("ansi");
 console.cursor = ansi(process.stdout);
 
+var useFilter = true;
 var debugMode = false;
 var canParseFloat = true;
 var syncFiles = [];
@@ -18,6 +19,10 @@ if (process && process.argv) {
       case "-d":
       case "--debug":
         debugMode = true;
+        break;
+      case "-nf":
+      case "--no-filter":
+        useFilter = false;
         break;
       case "-npf":
       case "--no-parse-float":
@@ -212,7 +217,7 @@ var buildReader = function (source, op, updater) {
 
     // build base query for the operation
     var sql = "SELECT " + columns.join(",") + " FROM " + op.source +
-      (op.filter ? " WHERE " + op.filter : "") +
+      (useFilter && op.filter ? " WHERE " + op.filter : "") +
       (!op.cursor && op.limit ? " LIMIT " + (op.limit + 1) : "") +
       (!op.cursor && op.limit && op.offset ? " OFFSET " + op.offset : "");
 
