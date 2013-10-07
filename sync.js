@@ -235,8 +235,9 @@ var buildReader = function (source, op, updater) {
 
       // open cursor if defined and not initialized
       if (op.cursor && !initialized.sourceCursor) {
-        // generate randomish cursor name if not set
-        if (typeof op.cursor != "string") op.cursor = op.source.replace(/[^a-z0-9_]+/gi,"_") + "_cursor_" + new Date().getTime();
+        if (typeof op.cursor != "string") { // generate randomish cursor name if not defined
+          op.cursor = op.source.replace(/[^a-z0-9_]+/gi,"_") + "_cursor_" + new Date().getTime();
+        }
         // open the cursor and prepare to fetch from it
         sql = "DECLARE " + op.cursor + " NO SCROLL CURSOR WITH HOLD FOR (" + sql + ")";
         debug("Opening cursor '" + op.cursor + "'...");
@@ -252,14 +253,13 @@ var buildReader = function (source, op, updater) {
 
       // execute the query and repeat as is necessary for results
       debug("Executing query '" + sql + "'...");
-      var err, query = source.client.query(sql);
-      query.on("error", function (err2) {
-        if (err2) err = err2; // record error for the "end" event
-      });
+      var query = source.client.query(sql);
+      query.on("error", error);
       query.on("row", function (row) {
         // honor the operation read limit if one has been set
-        if (op.limit && counter.readCount >= op.limit) return;
-        else {
+        if (op.limit && counter.readCount >= op.limit) {
+          return;
+        } else {
           ++counter.readCount;
           updater(row, updaterCallback);
         }
@@ -279,9 +279,9 @@ var buildReader = function (source, op, updater) {
           log((((counter.writeCount + counter.errorCount) / counter.readCount) * 100).toFixed(1) + "% written");
         }
         if (counter.readCount > (counter.writeCount + counter.errorCount)) {
-          setTimeout(end, 500); // wait for database writes to conclude
+          setTimeout(end, 1000); // wait for database writes to conclude
         } else {
-          if (!err && op.limit && counter.readCount >= op.limit) {
+          if (!counter.errorCount && op.limit && counter.readCount >= op.limit) {
             // reset the counter and run another batch
             op.offset = op.offset + counter.readCount;
             counter.reset();
@@ -291,13 +291,15 @@ var buildReader = function (source, op, updater) {
               " records, wrote " + counter.writeCountTotal + 
               " records, with " + counter.errorCountTotal + " errors.");
             // perform finalization action if defined
-            if (op.actions && op.actions.done && !err && !counter.errorCountTotal) {
+            if (op.actions && op.actions.done && !counter.errorCountTotal) {
               debug("Executing 'done' query '" + (op.actions.done.text || op.actions.done) + "'...");
               return source.client.query(op.actions.done, callback);
-            } else if (op.actions && op.actions.fail && (err || counter.errorCountTotal)) {
+            } else if (op.actions && op.actions.fail && counter.errorCountTotal) {
               debug("Executing 'fail' query '" + (op.actions.fail.text || op.actions.fail) + "'...");
               return source.client.query(op.actions.fail, callback);
-            } else return callback(err);
+            } else {
+              return callback();
+            }
           }
         }
       });
