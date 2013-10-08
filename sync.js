@@ -245,7 +245,7 @@ var buildReader = function (source, op, updater) {
         return source.client.query(sql, function (err, result) {
           if (err) return callback(err);
           // replace original sql query with a query against this cursor
-          sql = "FETCH FORWARD " + (op.limit ? op.limit : 1000) + " FROM " + op.cursor;
+          sql = "FETCH " + (op.limit ? "FORWARD " + op.limit : "ALL") + " FROM " + op.cursor;
           initialized.sourceCursor = true;
           return reader(callback);
         });
