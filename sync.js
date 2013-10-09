@@ -235,8 +235,8 @@ var buildReader = function (source, op, updater) {
 
       // open cursor if defined and not initialized
       if (op.cursor && !initialized.sourceCursor) {
-        if (typeof op.cursor != "string") { // generate randomish cursor name if not defined
-          op.cursor = op.source.replace(/[^a-z0-9_]+/gi,"_") + "_cursor_" + new Date().getTime();
+        if (typeof op.cursor != "string") { // generate randomized cursor name if not defined
+          op.cursor = ["mongres", "cursor", new Date().getTime(), Math.floor(Math.random() * 1000)].join('_');
         }
         // open the cursor and prepare to fetch from it
         sql = "DECLARE " + op.cursor + " NO SCROLL CURSOR WITH HOLD FOR (" + sql + ")";
@@ -365,13 +365,11 @@ var connect = function (config, callback) {
   }
 };
 
-var run = function (sync, callback) {
+var runSync = function (sync, callback) {
   if (sync instanceof Array) { // run the elements in sequence
-    if (sync.length) run(sync.shift(), function (err) {
-      if (err) callback(err);
-      else run(sync, callback);
-    }); else callback();
-    return;
+    return sync.length ? runSync(sync.shift(), function (err) {
+      return err ? callback(err) : runSync(sync, callback);
+    }) : callback();
   }
 
   var startDate = new Date();
@@ -432,6 +430,7 @@ var runOp = function (source, target, op, callback) {
 
   // default generic error handler
   if (!callback) callback = error;
+
   // supplement the given callback
   var endOp = function (err) {
     // send stats to the log
@@ -474,7 +473,7 @@ fs.readdir(SYNCS_PATH, function (err, files) {
       debug("Reading from '" + fileName + "'...");
       var sync = require(SYNCS_PATH + fileName);
       if (!sync) throw "Unable to parse JSON data.";
-      else run(sync, callback);
+      else runSync(sync, callback);
     } catch (err) {
       error("Invalid file: " + fileName);
       error(err);
