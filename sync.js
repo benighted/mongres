@@ -157,10 +157,18 @@ var buildUpdater = function (target, op) {
       var deref = function deref(model, src) {
         var doc = {};
         for (var k in model) {
-          if (typeof model[k] === "object") {
+          if (!model[k]) {
+            continue;
+          } else if (typeof model[k] === "object") {
             doc[k] = deref(model[k], src);
           } else if (typeof model[k] === "string") {
             if (model[k] in src) doc[k] = src[model[k]];
+            else {
+            console.log(model[k]);
+            console.log(src);
+            throw new Error('not found');
+            doc[k] = model[k]; // else uses literal
+            }
           }
         }
         return doc;
@@ -168,8 +176,9 @@ var buildUpdater = function (target, op) {
 
       // get values to use for query
       var query = deref(op.query, data);
-      // get values to use for update
-      var update = deref(op.update, data);
+      // get values to use for update and insert
+      var update = deref(op.upsert || op.update, data);
+      var insert = op.insert ? deref(op.insert, data) : null;
 
       // verify values are dereferenced
       if (!Object.keys(query).length) {
@@ -178,11 +187,21 @@ var buildUpdater = function (target, op) {
         callback("Update values not found in source.");
       } else { // update target collection
         collection.update(query, update, {
-          multi: op.multi === undefined ? true : op.multi,
-          upsert: op.upsert === undefined ? true : op.upsert,
-          journal: op.journal === undefined ? true : op.journal,
-          w: op.writeConcern === undefined ? 1 : op.writeConcern
-        }, callback);
+          multi:   op.multi   || true,
+          upsert:  op.upsert  || false,
+          fsync:   op.fsync   || false,
+          journal: op.journal || false,
+          w:       op.wc      || (op.journal || op.fsync ? 1 : 0)
+        }, function (err, aff) {
+          if (!err && !aff && !op.upsert && op.insert) { // do insert
+            console.log('insert');
+            collection.insert(insert, {
+              fsync:   op.fsync   || false,
+              journal: op.journal || false,
+              w:       op.wc      || (op.journal || op.fsync ? 1 : 0)
+            }, callback);
+          } else return callback(err, aff);
+        });
       }
     };
   }
@@ -207,13 +226,15 @@ var buildReader = function (source, op, updater) {
     var columns = [];
     (function getCols(model) {
       for (var k in model) {
-        if (typeof model[k] === "object") {
+        if (!model[k]) {
+          continue;
+        } else if (typeof model[k] === "object") {
           getCols(model[k]);
         } else if (typeof model[k] === "string") {
           columns.push('"' + model[k] + '"');
         }
       }
-    })([op.query, op.update]);
+    })([op.query, op.upsert, op.update, op.insert]);
 
     // build base query for the operation
     var sql = "SELECT " + columns.join(",") + " FROM " + op.source +
