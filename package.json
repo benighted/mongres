@@ -4,11 +4,10 @@
   "author": "Michael Payne <benighted@gmail.com>",
   "description": "Mongres ETL System",
   "contributors": [],
+  "main": "mongres.js",
   "scripts": {
-    "start": "node sync.js",
-    "test": "node sync.js --debug --syncs-path ./tests"
+    "start": "node mongres ./syncs"
   },
-  "main": "sync.js",
   "repository": {
     "type": "git",
     "url": "http://github.com/benighted/mongres.git"
