@@ -25,7 +25,7 @@ if (process.argv) {
 // run operation sets in parallel
 async.each(configs, function (config, next) {
   if (debugMode) config.debug = debugMode;
-  new Mongres(config).run();
+  new Mongres(config).run(next);
 }, function (err) {
   if (err) return console.error(err);
 });
