@@ -1,26 +1,27 @@
 {
   "name": "mongres",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "author": "Michael Payne <benighted@gmail.com>",
   "description": "Mongres ETL System",
   "contributors": [],
+  "main": "mongres.js",
   "scripts": {
-    "start": "node sync.js",
-    "test": "node sync.js --debug --syncs-path ./tests"
+    "start": "node mongres ./syncs"
   },
-  "main": "sync.js",
   "repository": {
     "type": "git",
     "url": "http://github.com/benighted/mongres.git"
   },
   "dependencies": {
-    "pg": "1.x",
+    "pg": "latest",
     "pg-parse-float": "latest",
+    "pg-query-stream": "latest",
     "mongodb": "latest",
+    "async": "latest",
     "ansi": "latest"
   },
   "engines": {
-    "node": ">=0.10"
+    "node": ">=0.10.21"
   },
   "bugs": {
     "url": "https://github.com/benighted/mongres/issues"
@@ -30,6 +31,7 @@
   "keywords": [
     "mongodb",
     "postgresql",
+    "node",
     "etl"
   ],
   "license": "GPL"

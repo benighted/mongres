@@ -1,4 +1,4 @@
-var SYNCS_PATH = "./syncs/";
+var SYNCS_PATH = __dirname + "/syncs/";
 var DB_TYPE_MONGODB = "mongodb";
 var DB_TYPE_POSTGRESQL = "postgresql";
 
@@ -8,6 +8,7 @@ var pg = require("pg");
 var ansi = require("ansi");
 console.cursor = ansi(process.stdout);
 
+var useFilter = true;
 var debugMode = false;
 var canParseFloat = true;
 var syncFiles = [];
@@ -18,6 +19,10 @@ if (process && process.argv) {
       case "-d":
       case "--debug":
         debugMode = true;
+        break;
+      case "-nf":
+      case "--no-filter":
+        useFilter = false;
         break;
       case "-npf":
       case "--no-parse-float":
@@ -152,10 +157,18 @@ var buildUpdater = function (target, op) {
       var deref = function deref(model, src) {
         var doc = {};
         for (var k in model) {
-          if (typeof model[k] === "object") {
+          if (!model[k]) {
+            continue;
+          } else if (typeof model[k] === "object") {
             doc[k] = deref(model[k], src);
           } else if (typeof model[k] === "string") {
             if (model[k] in src) doc[k] = src[model[k]];
+            else {
+            console.log(model[k]);
+            console.log(src);
+            throw new Error('not found');
+            doc[k] = model[k]; // else uses literal
+            }
           }
         }
         return doc;
@@ -163,8 +176,9 @@ var buildUpdater = function (target, op) {
 
       // get values to use for query
       var query = deref(op.query, data);
-      // get values to use for update
-      var update = deref(op.update, data);
+      // get values to use for update and insert
+      var update = deref(op.upsert || op.update, data);
+      var insert = op.insert ? deref(op.insert, data) : null;
 
       // verify values are dereferenced
       if (!Object.keys(query).length) {
@@ -173,11 +187,21 @@ var buildUpdater = function (target, op) {
         callback("Update values not found in source.");
       } else { // update target collection
         collection.update(query, update, {
-          multi: op.multi === undefined ? true : op.multi,
-          upsert: op.upsert === undefined ? true : op.upsert,
-          journal: op.journal === undefined ? true : op.journal,
-          w: op.writeConcern === undefined ? 1 : op.writeConcern
-        }, callback);
+          multi:   op.multi   || true,
+          upsert:  op.upsert  || false,
+          fsync:   op.fsync   || false,
+          journal: op.journal || false,
+          w:       op.wc      || (op.journal || op.fsync ? 1 : 0)
+        }, function (err, aff) {
+          if (!err && !aff && !op.upsert && op.insert) { // do insert
+            console.log('insert');
+            collection.insert(insert, {
+              fsync:   op.fsync   || false,
+              journal: op.journal || false,
+              w:       op.wc      || (op.journal || op.fsync ? 1 : 0)
+            }, callback);
+          } else return callback(err, aff);
+        });
       }
     };
   }
@@ -202,17 +226,19 @@ var buildReader = function (source, op, updater) {
     var columns = [];
     (function getCols(model) {
       for (var k in model) {
-        if (typeof model[k] === "object") {
+        if (!model[k]) {
+          continue;
+        } else if (typeof model[k] === "object") {
           getCols(model[k]);
         } else if (typeof model[k] === "string") {
           columns.push('"' + model[k] + '"');
         }
       }
-    })([op.query, op.update]);
+    })([op.query, op.upsert, op.update, op.insert]);
 
     // build base query for the operation
     var sql = "SELECT " + columns.join(",") + " FROM " + op.source +
-      (op.filter ? " WHERE " + op.filter : "") +
+      (useFilter && op.filter ? " WHERE " + op.filter : "") +
       (!op.cursor && op.limit ? " LIMIT " + (op.limit + 1) : "") +
       (!op.cursor && op.limit && op.offset ? " OFFSET " + op.offset : "");
 
@@ -230,8 +256,9 @@ var buildReader = function (source, op, updater) {
 
       // open cursor if defined and not initialized
       if (op.cursor && !initialized.sourceCursor) {
-        // generate randomish cursor name if not set
-        if (typeof op.cursor != "string") op.cursor = op.source.replace(/[^a-z0-9_]+/gi,"_") + "_cursor_" + new Date().getTime();
+        if (typeof op.cursor != "string") { // generate randomized cursor name if not defined
+          op.cursor = ["mongres", "cursor", new Date().getTime(), Math.floor(Math.random() * 1000)].join('_');
+        }
         // open the cursor and prepare to fetch from it
         sql = "DECLARE " + op.cursor + " NO SCROLL CURSOR WITH HOLD FOR (" + sql + ")";
         debug("Opening cursor '" + op.cursor + "'...");
@@ -239,7 +266,7 @@ var buildReader = function (source, op, updater) {
         return source.client.query(sql, function (err, result) {
           if (err) return callback(err);
           // replace original sql query with a query against this cursor
-          sql = "FETCH FORWARD " + (op.limit ? op.limit : 1000) + " FROM " + op.cursor;
+          sql = "FETCH " + (op.limit ? "FORWARD " + op.limit : "ALL") + " FROM " + op.cursor;
           initialized.sourceCursor = true;
           return reader(callback);
         });
@@ -247,14 +274,13 @@ var buildReader = function (source, op, updater) {
 
       // execute the query and repeat as is necessary for results
       debug("Executing query '" + sql + "'...");
-      var err, query = source.client.query(sql);
-      query.on("error", function (err2) {
-        if (err2) err = err2; // record error for the "end" event
-      });
+      var query = source.client.query(sql);
+      query.on("error", error);
       query.on("row", function (row) {
         // honor the operation read limit if one has been set
-        if (op.limit && counter.readCount >= op.limit) return;
-        else {
+        if (op.limit && counter.readCount >= op.limit) {
+          return;
+        } else {
           ++counter.readCount;
           updater(row, updaterCallback);
         }
@@ -274,9 +300,9 @@ var buildReader = function (source, op, updater) {
           log((((counter.writeCount + counter.errorCount) / counter.readCount) * 100).toFixed(1) + "% written");
         }
         if (counter.readCount > (counter.writeCount + counter.errorCount)) {
-          setTimeout(end, 500); // wait for database writes to conclude
+          setTimeout(end, 1000); // wait for database writes to conclude
         } else {
-          if (!err && op.limit && counter.readCount >= op.limit) {
+          if (!counter.errorCount && op.limit && counter.readCount >= op.limit) {
             // reset the counter and run another batch
             op.offset = op.offset + counter.readCount;
             counter.reset();
@@ -286,13 +312,15 @@ var buildReader = function (source, op, updater) {
               " records, wrote " + counter.writeCountTotal + 
               " records, with " + counter.errorCountTotal + " errors.");
             // perform finalization action if defined
-            if (op.actions && op.actions.done && !err && !counter.errorCountTotal) {
+            if (op.actions && op.actions.done && !counter.errorCountTotal) {
               debug("Executing 'done' query '" + (op.actions.done.text || op.actions.done) + "'...");
               return source.client.query(op.actions.done, callback);
-            } else if (op.actions && op.actions.fail && (err || counter.errorCountTotal)) {
+            } else if (op.actions && op.actions.fail && counter.errorCountTotal) {
               debug("Executing 'fail' query '" + (op.actions.fail.text || op.actions.fail) + "'...");
               return source.client.query(op.actions.fail, callback);
-            } else return callback(err);
+            } else {
+              return callback();
+            }
           }
         }
       });
@@ -358,13 +386,11 @@ var connect = function (config, callback) {
   }
 };
 
-var run = function (sync, callback) {
+var runSync = function (sync, callback) {
   if (sync instanceof Array) { // run the elements in sequence
-    if (sync.length) run(sync.shift(), function (err) {
-      if (err) callback(err);
-      else run(sync, callback);
-    }); else callback();
-    return;
+    return sync.length ? runSync(sync.shift(), function (err) {
+      return err ? callback(err) : runSync(sync, callback);
+    }) : callback();
   }
 
   var startDate = new Date();
@@ -425,6 +451,7 @@ var runOp = function (source, target, op, callback) {
 
   // default generic error handler
   if (!callback) callback = error;
+
   // supplement the given callback
   var endOp = function (err) {
     // send stats to the log
@@ -467,7 +494,7 @@ fs.readdir(SYNCS_PATH, function (err, files) {
       debug("Reading from '" + fileName + "'...");
       var sync = require(SYNCS_PATH + fileName);
       if (!sync) throw "Unable to parse JSON data.";
-      else run(sync, callback);
+      else runSync(sync, callback);
     } catch (err) {
       error("Invalid file: " + fileName);
       error(err);
