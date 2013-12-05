@@ -1,8 +1,6 @@
 # Mongres ETL System for Node.js
 ### Synchronize PostgreSQL and MongoDB using Node.js
 
-
-.
 A Mongres module should export a JSON object like this:
 
 ```
@@ -101,7 +99,7 @@ module.exports = {
     },
 
     transform: { // transform is optional
-      // transform data from "postgres" database into a standardized format
+      // transform data from "postgres" database into a different format
       postgres: function (db, registry, data) {
         return { // transformed data
           _id: data.generate_series,
@@ -115,14 +113,58 @@ module.exports = {
     load: { // load is required
       // load data from all sources into "mongo" database
       mongo: function (db, registry, data, cb) {
-        // todo
+        if (!data) return cb('No data was given.');
+
+        db.upsert(
+          { // query
+            test: {
+              _id: data._id
+            }
+          },
+          { // update
+            test: data
+          },
+          { // options
+            w: 1,
+            journal: true,
+            upsert: true
+          },
+          function (err, result) {
+            if (err) return cb(err);
+
+            // determine most recent changed date
+            if (!registry.lastChange || registry.lastChange < data.changed) {
+              registry.lastChange = data.changed;
+            }
+
+            return cb(null, result); // proceed to next load functions or exit
+          }
+        );
       }
     },
 
-    exit: { // exit is optional
-      // execute finalization commands on "mongo" database
+    exit: {
       mongo: function (db, registry, cb) {
-        // todo
+        db.upsert(
+          { // query
+            sync_meta: {
+              _id: 'test'
+            }
+          },
+          { // update
+            sync_meta: {
+              $set: {
+                lastChange: registry.lastChange
+              }
+            }
+          },
+          { // options
+            w: 1,
+            journal: true,
+            upsert: true
+          },
+          cb // close connections and end the operation
+        );
       }
     }
   }
