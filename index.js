@@ -13,7 +13,7 @@ var Mongres = function Mongres(config) {
   this.config = config;
 };
 
-Mongres.prototype.run = function () {
+Mongres.prototype.run = function (callback) {
   var queue = [];
 
   // queue defined operations
@@ -26,16 +26,11 @@ Mongres.prototype.run = function () {
   }
 
   // run operations in series
-  console.info('Running operations...');
   async.eachSeries(queue, function (op, next) {
     op.run(function (err) {
-      if (err) console.error(err);
-      op.finish(next);
+      op.finish(next.bind(this, err));
     });
-  }, function (err) {
-    if (err) return console.error(err);
-    console.info('All operations have finished.');
-  });
+  }, callback);
 };
 
 module.exports = Mongres;
