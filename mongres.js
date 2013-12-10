@@ -27,5 +27,6 @@ async.each(configs, function (config, next) {
   if (debugMode) config.debug = debugMode;
   new Mongres(config).run(next);
 }, function (err) {
-  if (err) return console.error(err);
+  if (err) console.error(err);
+  console.log("\n");
 });
