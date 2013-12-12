@@ -123,7 +123,7 @@ module.exports = {
             if (docs && docs.length) { // docs found
               var doc = docs.shift(); // use first doc
               registry.lastChange = doc.lastChange;
-            } else { // use current date by default
+            } else {
               registry.lastChange = new Date(0);
             }
 
@@ -202,14 +202,13 @@ module.exports = {
           },
           { // options
             w: 1,
-            journal: true,
-            upsert: true
+            journal: true
           },
           function (err, result) {
             if (err) return cb(err);
 
             // determine most recent changed date
-            if (!registry.lastChange || registry.lastChange < data.changed) {
+            if (registry.lastChange < data.changed) {
               registry.lastChange = data.changed;
             }
 
@@ -236,8 +235,7 @@ module.exports = {
           },
           { // options
             w: 1,
-            journal: true,
-            upsert: true
+            journal: true
           },
           cb // close connections and end the operation
         );
