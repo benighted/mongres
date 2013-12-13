@@ -5,7 +5,7 @@ var Mongres = require('./index');
 
 var configs = [];
 var period = null;
-var debugMode = false;
+var debug = false;
 
 // process cli arguments
 for (var i = 2; i < process.argv.length; i++) {
@@ -13,7 +13,7 @@ for (var i = 2; i < process.argv.length; i++) {
     case "-d":
     case "-db": // works with nodemon
     case "--debug":
-      debugMode = true;
+      debug = true;
       break;
     case "-p":
     case "--period":
@@ -33,7 +33,10 @@ for (var i = 2; i < process.argv.length; i++) {
 (function runConfigs() {
   // run config sets in parallel
   async.each(configs, function (config, next) {
-    if (debugMode) config.debug = debugMode;
+    if (debug) config.debug = debug;
+    if (config.debug) console.info('Debug mode enabled.');
+    if (period) console.info('Running every ' + period + ' seconds.');
+
     new Mongres(config).run(next);
   }, function (err) {
     if (err) return console.error(err);
