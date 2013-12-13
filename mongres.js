@@ -31,6 +31,8 @@ for (var i = 2; i < process.argv.length; i++) {
 }
 
 (function runConfigs() {
+  var start = new Date();
+
   // run config sets in parallel
   async.each(configs, function (config, next) {
     if (debug) config.debug = debug;
@@ -42,7 +44,9 @@ for (var i = 2; i < process.argv.length; i++) {
     } else if (!period) {
       process.exit(0);
     } else {
-      setTimeout(runConfigs, period * 1000);
+      var diff = (new Date().getTime() - start.getTime()) / 1000;
+      diff = period > diff ? Math.ceil(period - diff) : 1;
+      setTimeout(runConfigs, diff * 1000);
     }
   });
 })();
