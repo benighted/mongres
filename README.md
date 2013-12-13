@@ -157,8 +157,8 @@ module.exports = {
               process(data, function (err) {
                 procs--; // decrement process counter
 
-                if (err) {
-                  error = err;
+                if (err) { // pass the error
+                  stream.emit('error', err);
                   return stream.emit('end');
                 }
 
@@ -167,8 +167,15 @@ module.exports = {
               });
             });
 
+            // record errors for 'end' event
+            stream.on('error', function (err) {
+              error = err;
+            });
+
             // execute callback function when ended
-            stream.on('end', cb.bind(this, error));
+            return stream.on('end', function () {
+              cb(error);
+            });
           }
         );
       }

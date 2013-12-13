@@ -34,12 +34,15 @@ for (var i = 2; i < process.argv.length; i++) {
   // run config sets in parallel
   async.each(configs, function (config, next) {
     if (debug) config.debug = debug;
-    if (config.debug) console.info('Debug mode enabled.');
-    if (period) console.info('Running every ' + period + ' seconds.');
-
     new Mongres(config).run(next);
   }, function (err) {
-    if (err) return console.error(err);
-    if (period) setTimeout(runConfigs, period * 1000);
+    if (err) {
+      console.error(err);
+      process.exit(1);
+    } else if (!period) {
+      process.exit(0);
+    } else {
+      setTimeout(runConfigs, period * 1000);
+    }
   });
 })();
