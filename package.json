@@ -1,6 +1,6 @@
 {
   "name": "mongres",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "author": "Michael Payne <benighted@gmail.com>",
   "description": "Mongres ETL System",
   "contributors": [],
@@ -13,12 +13,11 @@
     "url": "http://github.com/benighted/mongres.git"
   },
   "dependencies": {
+    "async": "latest",
+    "mongodb": "latest",
     "pg": "latest",
     "pg-parse-float": "latest",
-    "pg-query-stream": "latest",
-    "mongodb": "latest",
-    "async": "latest",
-    "ansi": "latest"
+    "pg-query-stream": "latest"
   },
   "engines": {
     "node": ">=0.10.21"
