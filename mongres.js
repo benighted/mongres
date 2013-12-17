@@ -7,15 +7,22 @@ var Mongres = require('./index');
 var configPaths = [];
 var period = null;
 var debug = false;
+var verbose = false;
 
 // process cli arguments
 for (var i = 2; i < process.argv.length; i++) {
   switch (process.argv[i]) {
     // debugging options
     case "-d":
-    case "-db": // works with nodemon
     case "--debug":
       debug = true;
+      verbose = true;
+      break;
+
+    // verbose output
+    case "-v":
+    case "--verbose":
+      verbose = true;
       break;
 
     // time period between executions
@@ -36,7 +43,7 @@ for (var i = 2; i < process.argv.length; i++) {
 
         configPaths.push(cPath);
         fs.watchFile(cPath, function (prev, curr) {
-          console.log('Detected change to ' + cPath);
+          if (verbose) console.log('Detected modification of ' + cPath);
           delete require.cache[require.resolve(cPath)];
         });
       } catch (err) {
@@ -46,23 +53,28 @@ for (var i = 2; i < process.argv.length; i++) {
   }
 }
 
-(function runConfigs() {
+if (!configPaths) {
+  if (verbose) console.log('Nothing to do, shutting down...');
+} else (function runConfigs() {
   var start = new Date();
   // run config sets in parallel
   async.each(configPaths, function (cPath, next) {
     var cModule = require(cPath);
     if (debug) cModule.debug = debug;
+    if (cModule.debug) verbose = cModule.debug;
+    if (verbose) cModule.verbose = verbose;
+    if (cModule.verbose) console.log('Running module: ' + cPath);
     new Mongres(cModule).run(next);
   }, function (err) {
-    if (err) {
-      console.error(err);
-      process.exit(1);
-    } else if (!period) {
-      process.exit(0);
-    } else {
-      var diff = (new Date().getTime() - start.getTime()) / 1000;
-      diff = period > diff ? Math.ceil(period - diff) : 1;
-      setTimeout(runConfigs, diff * 1000);
+    if (err || !period) {
+      if (err) console.error(err);
+      if (verbose) console.log('Finished, shutting down...');
+      process.exit(err ? 1 : 0);
+    } else { // calculate delay sufficient to maintain the period
+      var delay = (new Date().getTime() - start.getTime()) / 1000;
+      delay = Math.max(Math.ceil(period - delay), 10); // min 10 seconds
+      if (verbose) console.log('Sleeping for ' + delay + ' seconds...');
+      setTimeout(runConfigs, delay * 1000);
     }
   });
 })();
