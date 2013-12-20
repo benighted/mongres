@@ -147,13 +147,15 @@ module.exports = {
       postgres: function (db, registry, load, cb) {
         db.queryStream(
           { // query
-            text: "SELECT                                  \
-              NOW() AS now,                                \
-              $1::timestamp AS date,                       \
-              ARRAY['zero','one','two'] AS arr,            \
-              '{\"a\": \"b\", \"c\": \"d\"}'::json AS obj, \
-              GENERATE_SERIES(1,1000) AS series            ",
-            values: [registry.lastDate]
+            text: "                                                            \
+              SELECT                                                           \
+                GENERATE_SERIES($1::int, $2::int) AS series,                   \
+                $3::timestamp + (RANDOM() || ' days')::INTERVAL AS date,       \
+                ARRAY['zero','one','two'] AS arr,                              \
+                '{\"a\": \"b\", \"c\": \"d\"}'::json AS obj                    \
+              ORDER BY date                                                    \
+            ",
+            values: [1, 1000, registry.lastDate]
           }, // options parameter has been omitted
           function (err, stream) { // callback function
             if (err) return cb(err);
