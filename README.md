@@ -64,6 +64,9 @@ The `db` parameter will be a `Database` instance configured for the specified da
 - __load (db, registry, data, callback)__
   * Executed once for each record emitted by `extract` and `transform` functions.
   * Can be used to populate registry with aggregated or incremental data.
+  __interval (db, registry, callback)__ (_optional_)
+  * Executed at regular intervals after load function
+  * Useful for recording incremental progress in case of failures.
 - __exit (db, registry, callback)__ (_optional_)
   * Executed once after all other functions have finished.
   * Useful for cleaning up after operation, and for recording summary data.
@@ -103,58 +106,68 @@ module.exports = {
 
     init: { // init is optional
       // read data from "mongo" database into registry
-      mongo: function (db, registry, cb) {
-        db.queryArray(
-          { // query
-            sync_meta: {
-              _id: 'test'
-            }
-          },
-          { // options
-            limit: 1,
-            fields: {
-              _id: 0,
-              lastChange: 1
-            }
-          },
-          function (err, docs) {
-            if (err) return cb(err);
+      mongo: [
+        function (db, registry, cb) {
+          db.queryArray(
+            { // query
+              mongres: {
+                _id: "test"
+              }
+            },
+            { // options
+              limit: 1,
+              fields: {
+                _id: 0,
+                lastDate: 1
+              }
+            },
+            function (err, docs) {
+              if (err) return cb(err);
 
-            if (docs && docs.length) { // docs found
-              var doc = docs.shift(); // use first doc
-              registry.lastChange = doc.lastChange;
-            } else {
-              registry.lastChange = new Date(0);
-            }
+              var doc = docs ? docs.shift() : {};
+              registry.lastDate = doc.lastDate || new Date(0);
 
-            return cb(); // continue to "extract" step
-          }
-        );
-      }
+              return cb(); // continue to "extract" step
+            }
+          );
+        }, function (db, registry, cb) {
+          // truncate the collection
+          db.remove(
+            { // query
+              test: {}
+            },
+            cb
+          );
+        }
+      ]
     },
 
     extract: { // extract is required
-      // stream data from "postgres" database to transform and load functions
-      postgres: function (db, registry, process, cb) {
+      // stream data from "postgres" database to load function(s)
+      postgres: function (db, registry, load, cb) {
         db.queryStream(
           { // query
-            text: "select now(), generate_series(1,10000)",
-            values: []
+            text: "SELECT                                  \
+              NOW() AS now,                                \
+              $1::timestamp AS date,                       \
+              ARRAY['zero','one','two'] AS arr,            \
+              '{\"a\": \"b\", \"c\": \"d\"}'::json AS obj, \
+              GENERATE_SERIES(1,1000) AS series            ",
+            values: [registry.lastDate]
           }, // options parameter has been omitted
           function (err, stream) { // callback function
             if (err) return cb(err);
 
             var error = null, procs = 0, limit = 10;
 
-            // call "process" method for each record
+            // call "load" method for each record
             stream.on('data', function (data) {
               procs++; // increment process counter
 
               // pause stream if procs over limit
               if (procs >= limit) stream.pause();
 
-              // pass data in to "transform" and "load" steps
-              process(data, function (err) {
+              load(data, function (err) {
                 procs--; // decrement process counter
 
                 if (err) { // pass the error
@@ -173,9 +186,7 @@ module.exports = {
             });
 
             // execute callback function when ended
-            return stream.on('end', function () {
-              cb(error);
-            });
+            return stream.on('end', cb.bind(this, error));
           }
         );
       }
@@ -185,10 +196,10 @@ module.exports = {
       // transform data from "postgres" database into a different format
       postgres: function (db, registry, data) {
         return { // transformed data
-          _id: data.generate_series,
-          date: new Date(),
-          arr: [0,1,2],
-          obj: {a: 'a', b: 'b'}
+          _id: data.series,
+          date: data.date,
+          arr: data.arr,
+          obj: data.obj
         };
       }
     },
@@ -215,8 +226,8 @@ module.exports = {
             if (err) return cb(err);
 
             // determine most recent changed date
-            if (registry.lastChange < data.changed) {
-              registry.lastChange = data.changed;
+            if (!registry.lastDate || registry.lastDate < data.date) {
+              registry.lastDate = data.date;
             }
 
             return cb(null, result); // proceed to next load functions or exit
@@ -225,18 +236,45 @@ module.exports = {
       }
     },
 
+    interval: {
+      100: { // executed every 100 records
+        mongo: function (db, registry, cb) {
+          db.upsert(
+            { // query
+              mongres: {
+                _id: 'test'
+              }
+            },
+            { // update
+              mongres: {
+                $set: {
+                  lastDate: registry.lastDate
+                }
+              }
+            },
+            { // options
+              w: 1,
+              journal: true
+            },
+            cb
+          );
+        }
+      }
+    },
+
     exit: {
+      // executed after all rows processed
       mongo: function (db, registry, cb) {
         db.upsert(
           { // query
-            sync_meta: {
+            mongres: {
               _id: 'test'
             }
           },
           { // update
-            sync_meta: {
+            mongres: {
               $set: {
-                lastChange: registry.lastChange
+                lastDate: registry.lastDate
               }
             }
           },
@@ -248,8 +286,8 @@ module.exports = {
         );
       }
     }
-
   }
+
 };
 
 ```
