@@ -18,7 +18,7 @@ for (var i = 2; i < process.argv.length; i++) {
     case "--help":
       console.log(
         'Mongres v' + pkg.version + ' by ' + pkg.author + '\n' +
-        '\nUsage: node ' + pkg.main + ' [ options ] < file1, file2, ... >\n\n' +
+        '\nUsage: node ' + pkg.main + ' [options] <file1 [file2 ...]>\n\n' +
         '  -h, --help           Display usage help\n' +
         '  -v, --version        Display version number\n' +
         '  -d, --debug          Enable debug mode\n' +

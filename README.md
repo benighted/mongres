@@ -10,9 +10,16 @@ Mongres uses configurable modules containing database and operation definitions 
 
 
 ### Command Line Usage
+```
+Usage: node mongres.js [options] <file1 [file2 ...]>
 
-    node mongres <path to module file>
-
+  -h, --help           Display usage help
+  -v, --version        Display version number
+  -d, --debug          Enable debug mode
+  -q, --quiet          Disable verbose output
+  -p, --period         Specify periodic execution ( in sec )
+  -f, --file           Specify module file to load ( default )
+```
 
 ### Database Definitions
 
