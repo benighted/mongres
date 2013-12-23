@@ -3,26 +3,49 @@ var path = require('path');
 var async = require('async');
 
 var Mongres = require('./index');
+var pkg = require('./package.json');
 
 var configPaths = [];
 var period = null;
 var debug = false;
-var verbose = false;
+var verbose = true;
 
 // process cli arguments
 for (var i = 2; i < process.argv.length; i++) {
   switch (process.argv[i]) {
-    // debugging options
+    // help output
+    case "-h":
+    case "--help":
+      console.log(
+        'Mongres v' + pkg.version + ' by ' + pkg.author + '\n' +
+        '\nUsage: node ' + pkg.main + ' [ options ] < file1, file2, ... >\n\n' +
+        '  -h, --help           Display usage help\n' +
+        '  -v, --version        Display version number\n' +
+        '  -d, --debug          Enable debug mode\n' +
+        '  -q, --quiet          Disable verbose output\n' +
+        '  -p, --period         Specify periodic execution ( in sec )\n' +
+        '  -f, --file           Specify module file to load ( default )\n' +
+        '\nReport issues or suggestions at ' + pkg.bugs.url);
+      process.exit(0);
+      break;
+
+    // version output
+    case "-v":
+    case "--version":
+      console.log(pkg.version);
+      process.exit(0);
+      break;
+
+    // debug mode
     case "-d":
     case "--debug":
       debug = true;
-      verbose = true;
       break;
 
-    // verbose output
-    case "-v":
-    case "--verbose":
-      verbose = true;
+    // quiet mode 
+    case "-q":
+    case "--quiet":
+      verbose = false;
       break;
 
     // time period between executions
@@ -52,6 +75,8 @@ for (var i = 2; i < process.argv.length; i++) {
       break;
   }
 }
+
+if (verbose) console.log('Mongres v%s starting up...', pkg.version);
 
 if (!configPaths) {
   if (verbose) console.log('Nothing to do, shutting down...');
