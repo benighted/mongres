@@ -80,10 +80,24 @@ if (verbose) console.log('Mongres v%s starting up...', pkg.version);
 
 if (!configPaths) {
   if (verbose) console.log('Nothing to do, shutting down...');
-} else (function runConfigs() {
+} else (function runConfigs(paths) {
   var start = new Date();
   // run config sets in parallel
-  async.each(configPaths, function (cPath, next) {
+  async.each(paths, function (cPath, next) {
+    var stat = fs.statSync(cPath);
+    if (stat.isDirectory()) { // run all files in path
+      return fs.readdir(cPath, function (err, paths) {
+        if (err) return next(err);
+
+        paths = paths.map(function (p) {
+          console.log(path.join(cPath, p));
+          return path.join(cPath, p);
+        });
+
+        return runConfigs(paths);
+      });
+    }
+
     var cModule = require(cPath);
     if (debug) cModule.debug = debug;
     if (cModule.debug) verbose = cModule.debug;
@@ -102,4 +116,4 @@ if (!configPaths) {
       setTimeout(runConfigs, delay * 1000);
     }
   });
-})();
+})(configPaths);
