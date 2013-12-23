@@ -1,2 +1,3 @@
 node_modules
 /syncs
+/tests/db.js
