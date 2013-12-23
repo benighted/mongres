@@ -124,7 +124,7 @@ module.exports = {
             function (err, docs) {
               if (err) return cb(err);
 
-              var doc = docs ? docs.shift() : {};
+              var doc = docs && docs.shift() || {};
               registry.lastDate = doc.lastDate || new Date(0);
 
               return cb(); // continue to "extract" step
