@@ -158,10 +158,9 @@ module.exports = {
           { // query
             text: "                                                            \
               SELECT                                                           \
-                GENERATE_SERIES($1::int, $2::int) AS series,                   \
-                $3::timestamp + (RANDOM() || ' days')::INTERVAL AS date,       \
-                ARRAY['zero','one','two'] AS arr,                              \
-                '{\"a\": \"b\", \"c\": \"d\"}'::json AS obj                    \
+                GENERATE_SERIES($1::int, $2::int) AS series, $3::timestamp +   \
+                (RANDOM()::NUMERIC(3,2) || ' days')::INTERVAL AS date,         \
+                ARRAY['a','b','c'] AS arr,'{\"a\":{\"b\":\"c\"}}'::json AS obj \
               ORDER BY date                                                    \
             ",
             values: [1, 1000, registry.lastDate]
@@ -306,3 +305,9 @@ module.exports = {
 };
 
 ```
+
+### Contributing
+Contributions, comments, and issue reports are __always__ welcome.  Send pull requests to the `master` branch with your proposed changes or create issues to report bugs.
+
+### Testing
+Copy `tests\db.sample.js` to `tests\db.js` and modify the credentials to match your development environment.  You will need one MongoDB and one PostgreSQL database set up and running to complete the tests.  To start tests, run `npm test` in your Mongres directory.
