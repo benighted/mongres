@@ -28,13 +28,13 @@ Databases can be defined and used almost interchangably with very minor differen
 - __queryArray (query, [options], callback)__
   * Execute `query` using `options` if given and pass the result set as an array to `callback` function.
   * `query` format for MongoDB is `{collectionName: {field: value}}`
-  * `query` format for PostgreSQL is `{text: 'select foo from bar where baz > $1 and bar < $2', values: [1,2]}`
+  * `query` format for PostgreSQL is `{text: 'select foo from bar where foo between $1 and $2', values: [1,10]}`
   * `callback` signature is `function (error, array)`
   * Caution: all records will be loaded into memory.  Do not use for very large data sets.
 - __queryStream (query, [options], callback)__
   * Execute `query` using `options` if given and pass a readable result stream to the `callback` function.
   * `query` format for MongoDB is `{collectionName: {field: value}}`
-  * `query` format for PostgreSQL is `{text: 'select foo from bar where baz > $1 and bar < $2', values: [1,2]}`
+  * `query` format for PostgreSQL is `{text: 'select foo from bar where foo between $1 and $2', values: [1,10]}`
   * `callback` signature is `function (error, stream)`
 - __insert (insert, [options], callback)__
   * Inserts `insert` into database using `options` if given.
