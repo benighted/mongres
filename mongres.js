@@ -83,6 +83,7 @@ if (!configPaths) {
 } else {
   var start = new Date();
 
+  // TODO: this needs to be rewritten and optimized
   (function runConfigs(paths) {
     if (!paths || !paths.length) paths = [];
 
