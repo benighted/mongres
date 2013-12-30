@@ -80,40 +80,45 @@ if (verbose) console.log('Mongres v%s starting up...', pkg.version);
 
 if (!configPaths) {
   if (verbose) console.log('Nothing to do, shutting down...');
-} else (function runConfigs(paths) {
+} else {
   var start = new Date();
-  // run config sets in parallel
-  async.each(paths, function (cPath, next) {
-    var stat = fs.statSync(cPath);
-    if (stat.isDirectory()) { // run all files in path
-      return fs.readdir(cPath, function (err, paths) {
-        if (err) return next(err);
 
-        paths = paths.map(function (p) {
-          console.log(path.join(cPath, p));
-          return path.join(cPath, p);
+  (function runConfigs(paths) {
+    if (!paths || !paths.length) paths = [];
+
+    // run config sets in parallel
+    async.each(paths, function (cPath, next) {
+      var stat = fs.statSync(cPath);
+      if (stat.isDirectory()) { // run all files in path
+        return fs.readdir(cPath, function (err, paths) {
+          if (err) return next(err);
+
+          paths = paths.map(function (p) {
+            console.log(path.join(cPath, p));
+            return path.join(cPath, p);
+          });
+
+          return runConfigs(paths);
         });
+      }
 
-        return runConfigs(paths);
-      });
-    }
-
-    var cModule = require(cPath);
-    if (debug) cModule.debug = debug;
-    if (cModule.debug) verbose = cModule.debug;
-    if (verbose) cModule.verbose = verbose;
-    if (cModule.verbose) console.log('Running module: ' + cPath);
-    new Mongres(cModule).run(next);
-  }, function (err) {
-    if (err || !period) {
-      if (err) console.error(err);
-      if (verbose) console.log('Finished, shutting down...');
-      process.exit(err ? 1 : 0);
-    } else { // calculate delay sufficient to maintain the period
-      var delay = (new Date().getTime() - start.getTime()) / 1000;
-      delay = Math.max(Math.ceil(period - delay), 10); // min 10 seconds
-      if (verbose) console.log('Sleeping for ' + delay + ' seconds...');
-      setTimeout(runConfigs, delay * 1000);
-    }
-  });
-})(configPaths);
+      var cModule = require(cPath);
+      if (debug) cModule.debug = debug;
+      if (cModule.debug) verbose = cModule.debug;
+      if (verbose) cModule.verbose = verbose;
+      if (cModule.verbose) console.log('Running module: ' + cPath);
+      new Mongres(cModule).run(next);
+    }, function (err) {
+      if (err || !period) {
+        if (err) console.error(err);
+        if (verbose) console.log('Finished, shutting down...');
+        process.exit(err ? 1 : 0);
+      } else { // calculate delay sufficient to maintain the period
+        var delay = (new Date().getTime() - start.getTime()) / 1000;
+        delay = Math.max(Math.ceil(period - delay), 10); // min 10 seconds
+        if (verbose) console.log('Sleeping for ' + delay + ' seconds...');
+        setTimeout(runConfigs, delay * 1000);
+      }
+    });
+  })(configPaths);
+}
