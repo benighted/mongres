@@ -96,6 +96,7 @@ if (!configPaths) {
         return fs.readdir(cPath, function (err, cPaths) {
           if (err) return console.error(err);
           return cPaths.forEach(function (p) {
+            if (p.charAt(0) === '.') return;
             run(path.join(cPath, p));
           });
         });
