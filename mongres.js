@@ -80,37 +80,58 @@ if (verbose) console.log('Mongres v%s starting up...', pkg.version);
 
 if (!configPaths) {
   if (verbose) console.log('Nothing to do, shutting down...');
-} else (function runConfigs(paths) {
-  var start = new Date();
-  // run config sets in parallel
-  async.each(paths, function (cPath, next) {
-    var stat = fs.statSync(cPath);
-    if (stat.isDirectory()) { // run all files in path
-      return fs.readdir(cPath, function (err, paths) {
-        if (err) return next(err);
+} else {
+  var start = new Date(), drained = false;
+  var queue = async.queue(function (mongres, next) {
+    mongres.run(next);
+  });
 
-        paths = paths.map(path.join.bind(null, cPath));
+  var run = function run(cPath) {
+    if (Array.isArray(cPath)) return cPath.map(run);
 
-        return runConfigs(paths);
-      });
-    }
+    fs.stat(cPath, function (err, stat) {
+      if (err) return console.error(err);
 
-    var cModule = require(cPath);
-    if (debug) cModule.debug = debug;
-    if (cModule.debug) verbose = cModule.debug;
-    if (verbose) cModule.verbose = verbose;
-    if (cModule.verbose) console.log('Running module: ' + cPath);
-    new Mongres(cModule).run(next);
-  }, function (err) {
-    if (err || !period) {
-      if (err) console.error(err);
+      if (stat.isDirectory()) {
+        return fs.readdir(cPath, function (err, cPaths) {
+          if (err) return console.error(err);
+          return cPaths.forEach(function (p) {
+            run(path.join(cPath, p));
+          });
+        });
+      } else if (stat.isFile()) {
+        var cModule = require(cPath);
+        if (debug) cModule.debug = debug;
+        if (verbose) cModule.verbose = verbose;
+        if (cModule.debug) cModule.verbose = true;
+        if (cModule.verbose) console.log('Loading module: ' + cPath);
+        queue.push(new Mongres(cModule), function (err) {
+          if (err) console.error(err);
+          if (verbose) console.log('Finished with module: ' + cPath);
+        });
+      }
+    });
+  };
+
+  queue.drain = function () {
+    if (drained) return;
+    else drained = true;
+
+    if (!period) {
       if (verbose) console.log('Finished, shutting down...');
-      process.exit(err ? 1 : 0);
+      // kill if not closed within 10 seconds
+      setTimeout(process.exit, 10000).unref();
     } else { // calculate delay sufficient to maintain the period
       var delay = (new Date().getTime() - start.getTime()) / 1000;
-      delay = Math.max(Math.ceil(period - delay), 10); // min 10 seconds
+      delay = Math.max(Math.ceil(period - delay), 1); // min 1 second
       if (verbose) console.log('Sleeping for ' + delay + ' seconds...');
-      setTimeout(runConfigs.bind(null, configPaths), delay * 1000);
+      setTimeout(function () {
+        start = new Date();
+        drained = false;
+        run(configPaths);
+      }, delay * 1000);
     }
-  });
-})(configPaths);
+  };
+
+  run(configPaths);
+}
