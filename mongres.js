@@ -89,10 +89,7 @@ if (!configPaths) {
       return fs.readdir(cPath, function (err, paths) {
         if (err) return next(err);
 
-        paths = paths.map(function (p) {
-          console.log(path.join(cPath, p));
-          return path.join(cPath, p);
-        });
+        paths = paths.map(path.join.bind(null, cPath));
 
         return runConfigs(paths);
       });
