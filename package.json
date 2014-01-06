@@ -1,6 +1,6 @@
 {
   "name": "mongres",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "author": "Michael Payne <benighted@gmail.com>",
   "description": "Mongres ETL System",
   "contributors": [],
