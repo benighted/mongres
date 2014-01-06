@@ -110,7 +110,7 @@ if (!configPaths) {
       var delay = (new Date().getTime() - start.getTime()) / 1000;
       delay = Math.max(Math.ceil(period - delay), 10); // min 10 seconds
       if (verbose) console.log('Sleeping for ' + delay + ' seconds...');
-      setTimeout(runConfigs, delay * 1000);
+      setTimeout(runConfigs.bind(null, configPaths), delay * 1000);
     }
   });
 })(configPaths);
